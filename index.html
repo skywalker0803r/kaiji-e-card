@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-Card Game | 賭博末世錄</title>
+    <style>
+        :root {
+            --bg-dark: #121212;
+            --bg-card: #1a1a1a;
+            --accent-red: #8b0000;
+            --bright-red: #ff0000;
+            --gold: #ffd700;
+            --silver: #c0c0c0;
+            --text-white: #e0e0e0;
+            --panel-bg: rgba(20, 20, 20, 0.9);
+            --transition-speed: 0.5s;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            background-image: radial-gradient(circle at center, #2a0000 0%, #121212 100%);
+            color: var(--text-white);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- Header / Scoreboard --- */
+        header {
+            padding: 10px 20px;
+            background: var(--panel-bg);
+            border-bottom: 2px solid var(--accent-red);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        .score-info {
+            display: flex;
+            gap: 20px;
+        }
+
+        .score-item {
+            text-align: center;
+        }
+
+        .score-label {
+            font-size: 0.8rem;
+            color: var(--silver);
+            text-transform: uppercase;
+        }
+
+        .score-value {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--gold);
+        }
+
+        .round-tracker {
+            font-size: 1.5rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            color: var(--bright-red);
+            text-shadow: 0 0 10px var(--bright-red);
+        }
+
+        .side-indicator {
+            padding: 5px 15px;
+            border-radius: 4px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .side-emperor { background: var(--gold); color: black; box-shadow: 0 0 10px var(--gold); }
+        .side-slave { background: #444; color: white; box-shadow: 0 0 10px #000; border: 1px solid #666; }
+
+        /* --- Main Layout --- */
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            position: relative;
+        }
+
+        .game-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            max-width: 1000px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* --- Enemy Area --- */
+        #ai-hand {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            min-height: 120px;
+        }
+
+        /* --- Battle Arena --- */
+        .battle-arena {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 40px;
+            perspective: 1000px;
+            position: relative;
+        }
+
+        .arena-slot {
+            width: 100px;
+            height: 150px;
+            border: 2px dashed rgba(255,255,255,0.1);
+            border-radius: 8px;
+            position: relative;
+        }
+
+        .arena-label {
+            position: absolute;
+            top: -25px;
+            width: 100%;
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--silver);
+            text-transform: uppercase;
+        }
+
+        /* --- Player Area --- */
+        #player-hand {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            min-height: 150px;
+            padding-bottom: 20px;
+        }
+
+        /* --- Card Styles --- */
+        .card {
+            width: 100px;
+            height: 150px;
+            cursor: pointer;
+            position: relative;
+            transition: transform 0.3s ease, top 0.3s ease;
+            user-select: none;
+        }
+
+        .card.interactive:hover {
+            transform: translateY(-20px);
+            z-index: 5;
+        }
+
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-style: preserve-3d;
+        }
+
+        .card.flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+
+        .card-front, .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border: 3px solid #333;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+        }
+
+        .card-back {
+            background: linear-gradient(135deg, #2c3e50 0%, #000000 100%);
+            background-image: 
+                radial-gradient(circle at 50% 50%, rgba(255,255,255,0.05) 0%, transparent 80%),
+                repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.2) 10px, rgba(0,0,0,0.2) 20px);
+            border: 3px solid #1a1a1a;
+        }
+
+        .card-front {
+            background-color: var(--bg-card);
+            transform: rotateY(180deg);
+        }
+
+        /* Card Variants */
+        .card-emperor .card-front { border-color: var(--gold); background: linear-gradient(to bottom, #2a2a00, #000); }
+        .card-slave .card-front { border-color: #555; background: linear-gradient(to bottom, #111, #000); }
+        .card-citizen .card-front { border-color: var(--silver); background: linear-gradient(to bottom, #222, #000); }
+
+        .card-icon { width: 60px; height: 60px; margin-bottom: 10px; }
+        .card-name { font-size: 0.9rem; font-weight: bold; text-transform: uppercase; }
+        .card-emperor .card-name { color: var(--gold); }
+        .card-slave .card-name { color: #888; }
+        .card-citizen .card-name { color: var(--silver); }
+
+        /* --- Battle Log --- */
+        .battle-log-container {
+            position: absolute;
+            right: 20px;
+            bottom: 180px;
+            width: 250px;
+            height: 200px;
+            background: rgba(0,0,0,0.7);
+            border: 1px solid var(--accent-red);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .log-header {
+            padding: 5px 10px;
+            background: var(--accent-red);
+            font-size: 0.7rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        #battle-log {
+            flex: 1;
+            padding: 10px;
+            font-size: 0.85rem;
+            overflow-y: auto;
+            color: #ccc;
+            line-height: 1.4;
+        }
+
+        .log-entry { margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; }
+        .log-system { color: var(--gold); font-weight: bold; }
+        .log-quote { font-style: italic; color: #ff6666; }
+
+        /* --- Modals --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-overlay.active { opacity: 1; pointer-events: auto; }
+
+        .modal-content {
+            background: #1a1a1a;
+            border: 2px solid var(--accent-red);
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 0 30px rgba(139,0,0,0.5);
+        }
+
+        .modal-title { font-size: 2rem; color: var(--gold); margin-bottom: 20px; text-transform: uppercase; }
+        .modal-body { margin-bottom: 30px; line-height: 1.6; text-align: left; }
+        .btn {
+            background: var(--accent-red);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: transform 0.2s, background 0.2s;
+            text-transform: uppercase;
+        }
+        .btn:hover { background: var(--bright-red); transform: scale(1.05); }
+
+        /* --- Animations --- */
+        .announce-overlay {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%) scale(0.5);
+            font-size: 5rem;
+            font-weight: 900;
+            z-index: 200;
+            pointer-events: none;
+            opacity: 0;
+            text-shadow: 0 0 20px black;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .announce-overlay.active { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+        .win-text { color: var(--gold); }
+        .lose-text { color: var(--bright-red); }
+
+        .shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+
+        /* --- RWD --- */
+        @media (max-width: 600px) {
+            .card { width: 60px; height: 90px; }
+            .arena-slot { width: 65px; height: 100px; }
+            .card-icon { width: 30px; height: 30px; }
+            .announce-overlay { font-size: 3rem; }
+            .battle-log-container { position: relative; width: 100%; bottom: 0; right: 0; height: 100px; margin-top: 10px; }
+            .round-tracker { font-size: 1rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="score-info">
+            <div class="score-item">
+                <div class="score-label">Player</div>
+                <div id="player-score" class="score-value">0</div>
+            </div>
+            <div class="score-item">
+                <div class="score-label">AI</div>
+                <div id="ai-score" class="score-value">0</div>
+            </div>
+        </div>
+        <div id="round-number" class="round-tracker">ROUND 1/12</div>
+        <div id="player-side" class="side-indicator side-emperor">Emperor</div>
+    </header>
+
+    <main id="game-view">
+        <div class="game-area">
+            <div id="ai-hand"></div>
+
+            <div class="battle-arena">
+                <div class="arena-slot">
+                    <div class="arena-label">AI Played</div>
+                    <div id="ai-slot"></div>
+                </div>
+                <div class="arena-slot">
+                    <div class="arena-label">You Played</div>
+                    <div id="player-slot"></div>
+                </div>
+            </div>
+
+            <div id="player-hand"></div>
+        </div>
+
+        <div class="battle-log-container">
+            <div class="log-header">Battle Log</div>
+            <div id="battle-log"></div>
+        </div>
+    </main>
+
+    <!-- Announce Overlay -->
+    <div id="announce" class="announce-overlay">WIN</div>
+
+    <!-- Start Modal -->
+    <div id="start-modal" class="modal-overlay active">
+        <div class="modal-content">
+            <h1 class="modal-title">E-Card</h1>
+            <div class="modal-body">
+                <p>歡迎來到暗黑地下賭場。規則很簡單：</p>
+                <ul style="padding-left: 20px; margin-top: 10px;">
+                    <li><strong>皇帝陣營</strong>：皇帝 > 市民</li>
+                    <li><strong>奴隸陣營</strong>：市民 > 奴隸，但 <strong>奴隸 > 皇帝</strong></li>
+                    <li>每 6 輪更換一次陣營，共 12 輪。</li>
+                    <li>準備好賭上一切了嗎？</li>
+                </ul>
+            </div>
+            <button id="start-game-btn" class="btn">開始遊戲</button>
+        </div>
+    </div>
+
+    <!-- End Modal -->
+    <div id="end-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h1 class="modal-title">對局結束</h1>
+            <div id="game-result-body" class="modal-body"></div>
+            <button id="restart-game-btn" class="btn">再挑戰一次</button>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * E-Card Game Constants & Config
+         */
+        const CARDS = {
+            EMPEROR: 'EMPEROR',
+            SLAVE: 'SLAVE',
+            CITIZEN: 'CITIZEN'
+        };
+
+        const ROLES = {
+            EMPEROR: 'EMPEROR',
+            SLAVE: 'SLAVE'
+        };
+
+        const TONEGAWA_QUOTES = [
+            "你在發抖嗎？那是當然的，因為你正站在深淵邊緣。",
+            "這就是現實，輸了的人就沒有任何藉口。",
+            "奴隸除了命什麼都沒有，但那也是他們唯一的武器。",
+            "皇帝雖然強大，但傲慢就是他的死穴。",
+            "有趣的心理戰…但你能堅持到最後嗎？",
+            "運氣？不，這是絕望與慾望的交織。"
+        ];
+
+        /**
+         * Game State Management
+         */
+        const GameState = {
+            round: 1,
+            maxRounds: 12,
+            playerScore: 0,
+            aiScore: 0,
+            playerRole: ROLES.EMPEROR,
+            playerHand: [],
+            aiHand: [],
+            playerHistory: [], // Track when player plays their special card
+            isWaiting: false,
+            
+            reset() {
+                this.round = 1;
+                this.playerScore = 0;
+                this.aiScore = 0;
+                this.playerRole = ROLES.EMPEROR;
+                this.playerHistory = [];
+            },
+
+            nextRound() {
+                this.round++;
+                // Swap roles every round for balance or keep 6/6 as per rule
+                if (this.round > 6) {
+                    this.playerRole = ROLES.SLAVE;
+                } else {
+                    this.playerRole = ROLES.EMPEROR;
+                }
+            }
+        };
+
+        /**
+         * SVG Assets Helpers
+         */
+        const getCardSVG = (type) => {
+            switch(type) {
+                case CARDS.EMPEROR:
+                    return `<svg class="card-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 15L3 8L8 11L12 4L16 11L21 8L19 15H5Z" fill="var(--gold)" stroke="var(--gold)" stroke-width="2" stroke-linejoin="round"/><rect x="5" y="17" width="14" height="2" fill="var(--gold)"/></svg>`;
+                case CARDS.SLAVE:
+                    return `<svg class="card-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7 10C7 8.34315 8.34315 7 10 7H14C15.6569 7 17 8.34315 17 10V14C17 15.6569 15.6569 17 14 17H10C8.34315 17 7 15.6569 7 14V10Z" stroke="#888" stroke-width="2"/><path d="M4 12H7M17 12H20M12 17V20M12 4V7" stroke="#888" stroke-width="2" stroke-linecap="round"/></svg>`;
+                default:
+                    return `<svg class="card-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="8" r="4" stroke="var(--silver)" stroke-width="2"/><path d="M6 21V19C6 16.7909 7.79086 15 10 15H14C16.2091 15 18 16.7909 18 19V21" stroke="var(--silver)" stroke-width="2" stroke-linecap="round"/></svg>`;
+            }
+        };
+
+        /**
+         * UI Logic
+         */
+        const UI = {
+            playerHandEl: document.getElementById('player-hand'),
+            aiHandEl: document.getElementById('ai-hand'),
+            playerSlotEl: document.getElementById('player-slot'),
+            aiSlotEl: document.getElementById('ai-slot'),
+            battleLogEl: document.getElementById('battle-log'),
+            roundEl: document.getElementById('round-number'),
+            playerSideEl: document.getElementById('player-side'),
+            playerScoreEl: document.getElementById('player-score'),
+            aiScoreEl: document.getElementById('ai-score'),
+            announceEl: document.getElementById('announce'),
+            startModal: document.getElementById('start-modal'),
+            endModal: document.getElementById('end-modal'),
+
+            renderHands() {
+                this.playerHandEl.innerHTML = '';
+                this.aiHandEl.innerHTML = '';
+
+                GameState.playerHand.forEach((cardType, index) => {
+                    const card = this.createCardElement(cardType, true, index);
+                    this.playerHandEl.appendChild(card);
+                });
+
+                GameState.aiHand.forEach((_, index) => {
+                    const card = this.createCardElement(null, false, index); // AI cards face down
+                    this.aiHandEl.appendChild(card);
+                });
+            },
+
+            createCardElement(type, isPlayer, index) {
+                const card = document.createElement('div');
+                card.className = `card ${type ? 'card-' + type.toLowerCase() : ''} ${isPlayer ? 'interactive' : ''}`;
+                card.dataset.index = index;
+                
+                const inner = document.createElement('div');
+                inner.className = 'card-inner';
+                
+                const front = document.createElement('div');
+                front.className = 'card-front';
+                if (type) {
+                    front.innerHTML = `${getCardSVG(type)}<div class="card-name">${type}</div>`;
+                }
+
+                const back = document.createElement('div');
+                back.className = 'card-back';
+
+                inner.appendChild(front);
+                inner.appendChild(back);
+                card.appendChild(inner);
+
+                if (isPlayer) {
+                    card.onclick = () => Engine.playTurn(index);
+                }
+
+                return card;
+            },
+
+            log(message, type = 'info') {
+                const entry = document.createElement('div');
+                entry.className = 'log-entry';
+                if (type === 'system') entry.classList.add('log-system');
+                if (type === 'quote') entry.classList.add('log-quote');
+                entry.innerText = message;
+                this.battleLogEl.prepend(entry);
+            },
+
+            announce(text, isWin) {
+                this.announceEl.innerText = text;
+                this.announceEl.className = `announce-overlay active ${isWin ? 'win-text' : 'lose-text'}`;
+                setTimeout(() => {
+                    this.announceEl.classList.remove('active');
+                }, 1500);
+            },
+
+            updateInfo() {
+                this.roundEl.innerText = `ROUND ${GameState.round}/${GameState.maxRounds}`;
+                this.playerScoreEl.innerText = GameState.playerScore;
+                this.aiScoreEl.innerText = GameState.aiScore;
+                
+                const isEmperor = GameState.playerRole === ROLES.EMPEROR;
+                this.playerSideEl.innerText = isEmperor ? 'Emperor' : 'Slave';
+                this.playerSideEl.className = `side-indicator ${isEmperor ? 'side-emperor' : 'side-slave'}`;
+            },
+
+            shake() {
+                document.body.classList.add('shake');
+                setTimeout(() => document.body.classList.remove('shake'), 500);
+            }
+        };
+
+        /**
+         * Smart AI Logic
+         */
+        const AI = {
+            chooseCard() {
+                const aiRole = GameState.playerRole === ROLES.EMPEROR ? ROLES.SLAVE : ROLES.EMPEROR;
+                const hand = GameState.aiHand;
+                const turnCount = 5 - hand.length; // How many cards played in this sub-round
+
+                if (aiRole === ROLES.EMPEROR) {
+                    // Emperor Strategy:
+                    // 15% chance to play Emperor on first turn to pressure
+                    if (turnCount === 0 && Math.random() < 0.15) {
+                        return this.findCardIndex(hand, CARDS.EMPEROR);
+                    }
+                    // Otherwise, try to save Emperor for later or play if few cards left
+                    if (hand.length <= 2 && Math.random() < 0.7) {
+                        return this.findCardIndex(hand, CARDS.EMPEROR);
+                    }
+                    // Default: play Citizen
+                    return this.findCardIndex(hand, CARDS.CITIZEN) || 0;
+                } else {
+                    // Slave Strategy:
+                    // 30% chance for early strike
+                    if (turnCount === 0 && Math.random() < 0.3) {
+                        return this.findCardIndex(hand, CARDS.SLAVE);
+                    }
+                    // "Back to wall": higher chance to play Slave as hand shrinks
+                    const strikeProb = (turnCount + 1) * 0.25;
+                    if (Math.random() < strikeProb) {
+                        return this.findCardIndex(hand, CARDS.SLAVE);
+                    }
+                    // Default: play Citizen
+                    return this.findCardIndex(hand, CARDS.CITIZEN) || 0;
+                }
+            },
+
+            findCardIndex(hand, type) {
+                const idx = hand.indexOf(type);
+                return idx === -1 ? null : idx;
+            }
+        };
+
+        /**
+         * Game Engine
+         */
+        const Engine = {
+            init() {
+                GameState.reset();
+                this.setupButtons();
+                this.startRound();
+            },
+
+            setupButtons() {
+                document.getElementById('start-game-btn').onclick = () => {
+                    UI.startModal.classList.remove('active');
+                };
+                document.getElementById('restart-game-btn').onclick = () => {
+                    UI.endModal.classList.remove('active');
+                    this.init();
+                };
+            },
+
+            startRound() {
+                UI.updateInfo();
+                UI.log(`--- Round ${GameState.round} 開始 ---`, 'system');
+                UI.log(TONEGAWA_QUOTES[Math.floor(Math.random() * TONEGAWA_QUOTES.length)], 'quote');
+
+                // Deal cards
+                const isEmperor = GameState.playerRole === ROLES.EMPEROR;
+                GameState.playerHand = Array(4).fill(CARDS.CITIZEN);
+                GameState.playerHand.push(isEmperor ? CARDS.EMPEROR : CARDS.SLAVE);
+                GameState.playerHand.sort(() => Math.random() - 0.5); // Initial shuffle
+
+                GameState.aiHand = Array(4).fill(CARDS.CITIZEN);
+                GameState.aiHand.push(isEmperor ? CARDS.SLAVE : CARDS.EMPEROR);
+
+                UI.playerSlotEl.innerHTML = '';
+                UI.aiSlotEl.innerHTML = '';
+                UI.renderHands();
+            },
+
+            async playTurn(playerIndex) {
+                if (GameState.isWaiting) return;
+                GameState.isWaiting = true;
+
+                const pCardType = GameState.playerHand[playerIndex];
+                const aiIndex = AI.chooseCard();
+                const aiCardType = GameState.aiHand[aiIndex];
+
+                // Remove from hands
+                GameState.playerHand.splice(playerIndex, 1);
+                GameState.aiHand.splice(aiIndex, 1);
+
+                // Move to slots (face down)
+                const pCardEl = UI.createCardElement(pCardType, false, -1);
+                const aiCardEl = UI.createCardElement(aiCardType, false, -1);
+                
+                UI.playerSlotEl.innerHTML = '';
+                UI.aiSlotEl.innerHTML = '';
+                UI.playerSlotEl.appendChild(pCardEl);
+                UI.aiSlotEl.appendChild(aiCardEl);
+
+                UI.renderHands(); // Update hand display
+                UI.log("雙方已出牌... 準備揭曉！");
+
+                // Reveal delay
+                await this.delay(800);
+                
+                pCardEl.classList.add('flipped');
+                aiCardEl.classList.add('flipped');
+
+                await this.delay(600);
+                this.resolveTurn(pCardType, aiCardType);
+            },
+
+            resolveTurn(pCard, aiCard) {
+                let result = 0; // 1: Player win, -1: AI win, 0: Draw
+
+                if (pCard === aiCard) {
+                    result = 0;
+                } else if (pCard === CARDS.EMPEROR) {
+                    result = (aiCard === CARDS.CITIZEN) ? 1 : -1;
+                } else if (pCard === CARDS.SLAVE) {
+                    result = (aiCard === CARDS.EMPEROR) ? 1 : -1;
+                } else if (pCard === CARDS.CITIZEN) {
+                    if (aiCard === CARDS.EMPEROR) result = -1;
+                    if (aiCard === CARDS.SLAVE) result = 1;
+                }
+
+                if (result === 0) {
+                    UI.log("平手！準備下一手。");
+                    GameState.isWaiting = false;
+                    if (GameState.playerHand.length === 0) {
+                        // This shouldn't normally happen in E-Card unless both are Citizens 5 times
+                        // But we handle it by restarting sub-round
+                        this.startRound();
+                    }
+                } else {
+                    this.finishRound(result > 0);
+                }
+            },
+
+            async finishRound(playerWon) {
+                if (playerWon) {
+                    GameState.playerScore++;
+                    UI.announce("勝利！", true);
+                    UI.log("你贏得了這一輪！", 'system');
+                } else {
+                    GameState.aiScore++;
+                    UI.announce("敗北…", false);
+                    UI.log("你輸掉了這一輪。", 'system');
+                    UI.shake();
+                }
+
+                await this.delay(2000);
+
+                if (GameState.round < GameState.maxRounds) {
+                    GameState.nextRound();
+                    GameState.isWaiting = false;
+                    this.startRound();
+                } else {
+                    this.endMatch();
+                }
+            },
+
+            endMatch() {
+                const diff = GameState.playerScore - GameState.aiScore;
+                let evaluation = "";
+                
+                if (diff > 0) {
+                    evaluation = "「精彩。你竟然能在這絕境中存活下來。你是真正的賭徒。」";
+                } else if (diff < 0) {
+                    evaluation = "「這就是現實。廢物就該待在地下，永遠地爬行吧。」";
+                } else {
+                    evaluation = "「平分秋色嗎？但在這賭場裡，平手也等同於失敗。」";
+                }
+
+                const resultBody = document.getElementById('game-result-body');
+                resultBody.innerHTML = `
+                    <div style="font-size: 1.5rem; color: var(--gold); margin-bottom: 10px;">
+                        玩家 ${GameState.playerScore} : ${GameState.aiScore} AI
+                    </div>
+                    <p style="font-style: italic; color: #ff6666;">${evaluation}</p>
+                `;
+
+                UI.endModal.classList.add('active');
+            },
+
+            delay(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+        };
+
+        // Start the game
+        window.onload = () => Engine.init();
+    </script>
+</body>
+</html>
